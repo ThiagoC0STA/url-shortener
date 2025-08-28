@@ -70,7 +70,10 @@ git push origin main
 4. Configure as variáveis de ambiente:
 
 ```env
-NEXT_PUBLIC_APP_URL=https://your-project.vercel.app
+# Optional: Override domain detection
+# NEXT_PUBLIC_APP_URL=https://your-project.vercel.app
+# 
+# If not set, the app automatically detects the domain
 DATABASE_URL=your-database-url
 ```
 
