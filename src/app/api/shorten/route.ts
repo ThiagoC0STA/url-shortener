@@ -1,8 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import { supabase } from "@/lib/supabase";
 import { nanoid } from "nanoid";
 import { NextRequest, NextResponse } from "next/server";
-
-const prisma = new PrismaClient();
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,47 +21,60 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if URL already exists
-    const existingUrl = await prisma.shortUrl.findUnique({
-      where: { originalUrl: url },
-    });
+    const { data: existingUrl } = await supabase
+      .from("short_urls")
+      .select("*")
+      .eq("original_url", url)
+      .single();
 
     if (existingUrl) {
       return NextResponse.json({
-        shortCode: existingUrl.shortCode,
-        originalUrl: existingUrl.originalUrl,
-        shortUrl: `${request.nextUrl.origin}/${existingUrl.shortCode}`,
+        shortCode: existingUrl.short_code,
+        originalUrl: existingUrl.original_url,
+        shortUrl: `${request.nextUrl.origin}/${existingUrl.short_code}`,
       });
     }
 
     // Generate unique short code
-    let shortCode: string;
+    let shortCode: string = "";
     let isUnique = false;
 
     while (!isUnique) {
       shortCode = nanoid(6); // 6 characters
-      const existing = await prisma.shortUrl.findUnique({
-        where: { shortCode },
-      });
+      const { data: existing } = await supabase
+        .from("short_urls")
+        .select("id")
+        .eq("short_code", shortCode)
+        .single();
+
       if (!existing) {
         isUnique = true;
       }
     }
 
     // Create new short URL
-    const shortUrl = await prisma.shortUrl.create({
-      data: {
-        originalUrl: url,
-        shortCode: shortCode!,
-      },
-    });
+    const { data: shortUrl, error } = await supabase
+      .from("short_urls")
+      .insert({
+        original_url: url,
+        short_code: shortCode,
+        clicks: 0,
+      })
+      .select()
+      .single();
 
-    // Get the correct domain for the short URL
-    const domain = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    if (error) {
+      console.error("Error creating short URL:", error);
+      return NextResponse.json(
+        { error: "Failed to create short URL" },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
-      shortCode: shortUrl.shortCode,
-      originalUrl: shortUrl.originalUrl,
-      shortUrl: `${domain}/${shortUrl.shortCode}`,
+      shortCode: shortUrl.short_code,
+      originalUrl: shortUrl.original_url,
+      shortUrl: `${request.nextUrl.origin}/${shortUrl.short_code}`,
     });
   } catch (error) {
     console.error("Error creating short URL:", error);

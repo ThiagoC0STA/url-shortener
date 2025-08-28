@@ -1,7 +1,5 @@
-import { PrismaClient } from "@prisma/client";
+import { supabase } from "@/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
-
-const prisma = new PrismaClient();
 
 export async function GET(
   request: NextRequest,
@@ -12,34 +10,30 @@ export async function GET(
     const { code } = resolvedParams;
 
     if (!code) {
-      return NextResponse.json({ error: "Code is required" }, { status: 400 });
+      return NextResponse.redirect(new URL("/", request.url));
     }
 
     // Find the short URL
-    const shortUrl = await prisma.shortUrl.findUnique({
-      where: { shortCode: code },
-    });
+    const { data: shortUrl, error } = await supabase
+      .from("short_urls")
+      .select("*")
+      .eq("short_code", code)
+      .single();
 
-    if (!shortUrl) {
-      return NextResponse.json(
-        { error: "Short URL not found" },
-        { status: 404 }
-      );
+    if (error || !shortUrl) {
+      return NextResponse.redirect(new URL("/", request.url));
     }
 
-    // Update click count
-    await prisma.shortUrl.update({
-      where: { id: shortUrl.id },
-      data: { clicks: shortUrl.clicks + 1 },
-    });
+    // Increment click count
+    await supabase
+      .from("short_urls")
+      .update({ clicks: shortUrl.clicks + 1 })
+      .eq("id", shortUrl.id);
 
-    // Redirect to original URL
-    return NextResponse.redirect(shortUrl.originalUrl);
+    // Redirect to the original URL
+    return NextResponse.redirect(shortUrl.original_url);
   } catch (error) {
-    console.error("Error redirecting short URL:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    console.error("Error redirecting:", error);
+    return NextResponse.redirect(new URL("/", request.url));
   }
 }
